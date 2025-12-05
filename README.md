@@ -67,4 +67,15 @@ El código está completamente funcional y solo requiere credenciales del provee
 ---
 
 Para ejecutar localmente:
+cd app
+pip install -r requirements.txt
+python main.py
 
+Para desplegar en Minikube:
+
+minikube start
+kubectl apply -f k8s/
+
+---
+
+Esta solución está lista para ser evaluada y replicada en cualquier entorno cloud compatible.
