@@ -1,0 +1,65 @@
+stages:
+  - validate
+  - security
+  - build
+  - dast
+  - deploy
+
+terraform_validate:
+  stage: validate
+  image: hashicorp/terraform
+  script:
+    - terraform init
+    - terraform validate
+
+checkov:
+  stage: security
+  image: bridgecrew/checkov
+  script:
+    - checkov -d terraform/
+
+sonar_sast:
+  stage: security
+  image: sonarsource/sonar-scanner-cli
+  script:
+    - sonar-scanner -Dsonar.host.url=$SONAR_URL -Dsonar.login=$SONAR_TOKEN
+
+dependency_check:
+  stage: security
+  image: owasp/dependency-check
+  script:
+    - dependency-check.sh --scan app/ --format HTML --out reports/
+  artifacts:
+    paths:
+      - reports/
+
+image_build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA app/
+    - docker push $CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA
+
+trivy_scan:
+  stage: security
+  image: aquasec/trivy
+  script:
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL $CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA
+
+zap_dast:
+  stage: dast
+  image: owasp/zap2docker-stable
+  script:
+    - zap-baseline.py -t http://app-svc.default.svc.cluster.local -r zap_report.html
+  artifacts:
+    paths:
+      - zap_report.html
+
+deploy:
+  stage: deploy
+  image: bitnami/kubectl
+  script:
+    - kubectl apply -f k8s/
+  when: manual
